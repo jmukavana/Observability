@@ -1,0 +1,64 @@
+{
+  "realm": "observability",
+  "enabled": true,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Full administrative access" },
+      { "name": "member", "description": "Standard authenticated user" }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin-demo",
+      "enabled": true,
+      "firstName": "Admin",
+      "lastName": "Demo",
+      "email": "admin-demo@observability.local",
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "admin-demo", "temporary": false }
+      ],
+      "realmRoles": ["admin", "member"]
+    },
+    {
+      "username": "member-demo",
+      "enabled": true,
+      "firstName": "Member",
+      "lastName": "Demo",
+      "email": "member-demo@observability.local",
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "member-demo", "temporary": false }
+      ],
+      "realmRoles": ["member"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "observability-api",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": ["basic", "roles", "profile", "email"],
+      "protocolMappers": [
+        {
+          "name": "observability-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "observability-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

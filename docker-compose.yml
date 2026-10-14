@@ -1,0 +1,151 @@
+services:
+  app:
+    build:
+      context: .
+    container_name: observability-api
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      DATABASE_URL: postgresql+asyncpg://observability:observability@postgres:5432/observability
+      OIDC_ISSUER: http://keycloak:8080/realms/observability
+      OIDC_AUDIENCE: observability-api
+    ports:
+      - "8001:8000"
+    depends_on:
+      - otel-collector
+      - postgres
+      - keycloak
+    networks:
+      - observability
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: observability-postgres
+    environment:
+      POSTGRES_DB: observability
+      POSTGRES_USER: observability
+      POSTGRES_PASSWORD: observability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observability -d observability"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "4432:5432"
+    networks:
+      - observability
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: observability-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./configs/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "4080:8080"
+    networks:
+      - observability
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    container_name: observability-otel-collector
+    command: ["--config=/etc/otelcol/otelcol.yml"]
+    volumes:
+      - ./configs/otelcol/otelcol.yml:/etc/otelcol/otelcol.yml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks:
+      - observability
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: observability-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "4090:9090"
+    networks:
+      - observability
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: observability-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./configs/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "4200:3200"
+    networks:
+      - observability
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: observability-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./configs/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    ports:
+      - "4100:3100"
+    networks:
+      - observability
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: observability-promtail
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./configs/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - observability
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: observability-grafana
+#    environment:
+#      GF_AUTH_ANONYMOUS_ENABLED: "true"
+#      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+#      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+#      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "4000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks:
+      - observability
+
+networks:
+  observability:
+    name: observability
+
+volumes:
+  grafana-data:
+  prometheus-data:
+  tempo-data:
+  loki-data:
+  postgres-data:
